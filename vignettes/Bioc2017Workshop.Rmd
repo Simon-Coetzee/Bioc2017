@@ -12,6 +12,7 @@ vignette: >
 ```{r}
 biocLite("Simon-Coetzee/StatePaintR", suppressUpdates = TRUE, dependencies = TRUE)
 biocLite("Simon-Coetzee/funciVar", suppressUpdates = TRUE, dependencies = TRUE)
+biocLite("motifbreakR")
 library(StatePaintR)
 library(funciVar)
 library(motifbreakR)
