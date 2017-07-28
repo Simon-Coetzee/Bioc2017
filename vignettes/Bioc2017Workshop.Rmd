@@ -110,15 +110,13 @@ In the next part of our workflow, we want to determine whether the index SNP and
 FunciVar by default calculates a likelihood based on the beta-binomial distribution, returning a 95% credible interval (optionally set by the "CI" argument) for the range of differences between the two populations of variants (_i.e._ foreground and background). Specifically it calculates a distribution of true enrichment (as probability of overlap) for both sets of variants in the genomic features based on the observed number of overlaps:
 
 ```{latex}
-\[
+$$
 \theta_{fg} ~ beta(S_{fg} + a, N_{fg} + b)
 \theta_{bg} ~ beta(S_{bg} + a, N_{bg} + b)
-\]
+$$
 ```
 
-FunciVar uses an uninformative Jeffreys prior[^ Jeffreys] to compare the two distributions directly by subtracting permuted samples to obtain the distribution of differences. The prior can be overidden in special cases (see documentation).
-
-[^ Jeffreys] A note about Jeffreys prior and links here.
+for S successes in N trials. FunciVar uses an uninformative Jeffreys prior (a=0.5, b=0.5) to compare the two distributions directly by subtracting permuted samples to obtain the distribution of differences. The prior can be overidden in special cases (see documentation).
 
 To perform these operations with funciVar, we call the "CalculateEnrichment" function.
 
@@ -146,9 +144,9 @@ snps.10q26.enhancers <- enrich10q26$overlaps$`Active Enhancer`$foregound.overlap
 
 # MotifBreakR analysis of TF binding disruption
 
-Now that we have a SNP of interest from breast tissue enhancer, let's work with the motifBreakR package to determine whether a putative transcription factor binding site (TFBS) is disrupted. MotifBreakR allows us to do this with nothing more than the rsID or a location and allele information. It enables us to use any genome housed in bioconductor BSgenome packages and any set of motifs curated in the MotifDB package (plus some custom databases in MotifDB format that are included with the MotifBreakR installation)[^Motifbreakr Manuscript].
+Now that we have a SNP of interest from breast tissue enhancer, let's work with the motifBreakR package to determine whether a putative transcription factor binding site (TFBS) is disrupted. MotifBreakR allows us to do this with nothing more than the rsID or a location and allele information. It enables us to use any genome housed in bioconductor BSgenome packages and any set of motifs curated in the MotifDB package (plus some custom databases in MotifDB format that are included with the MotifBreakR installation)[^1].
 
-[^Motifbreakr Manuscript] see the manuscript for details.
+[^1] see the [manuscript](https://academic.oup.com/bioinformatics/article/31/23/3847/209440/motifbreakR-an-R-Bioconductor-package-for) and [vignette](https://bioconductor.org/packages/release/bioc/vignettes/motifbreakR/inst/doc/motifbreakR-vignette.html) for details.
 
 ## Setup
 
