@@ -36,8 +36,14 @@ Annotations can come from any source, the key requirement be that they be coerce
 FunciVar imports these files efficiently by pointing a function called "GetSegmentations" directly at this directory. Then it's just a matter of renaming the state abbreviations to easily recognized, human readable form.
 
 ```{r}
-#### MODIFY THIS TO DOWNLOAD LIVE OR MAKE SURE TRACKS ARE INSIDE PACKAGE
-segmentation.files <- list.files("/common/bioc_workflow/segmentations/", full.names = TRUE)
+statehub.encode.aws <- "http://s3-us-west-2.amazonaws.com/statehub-trackhub/tracks/5813b67f46e0fb06b493ceb0/hg19/ENCODE/"
+segmentation.files <- c(paste0(statehub.encode.aws, "bipolar_spindle_neuron.8mark.segmentation.bed"),
+                        paste0(statehub.encode.aws, "dohh2.8mark.segmentation.bed"),
+                        paste0(statehub.encode.aws, "gm12878.11mark.segmentation.bed"),
+                        paste0(statehub.encode.aws, "hepatocyte.9mark.segmentation.bed"),
+                        paste0(statehub.encode.aws, "induced_pluripotent_stem_cell.7mark.segmentation.bed"),
+                        paste0(statehub.encode.aws, "mcf-7.12mark.segmentation.bed"),
+                        paste0(statehub.encode.aws, "neutrophil.8mark.segmentation.bed"))
 encode.segmenations <- GetSegmentations(segmentation.files, genome = "hg19")
 encode.segmenations
 encode.segmenations <- unlist(encode.segmenations)
