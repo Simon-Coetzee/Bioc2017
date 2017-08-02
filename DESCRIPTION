@@ -1,14 +1,16 @@
-Package: funcivarmotifbreakrstatepaintrbioc2017
+Package: bioc2017
 Type: Package
-Title: What the Package Does (Title Case)
-Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
-License: What license is it under?
+Title: Workshop for bioc2017
+Version: 0.2.0
+Author: Simon G. Coetzee and Dennis J. Hazelett
+Maintainer: Simon G. Coetzee <simon.coetzee@cshs.org>
+Description: This Contains the workshop code + vignette and data for
+    an example workflow for annotating variants with StateHub/StatePaintr, 
+    funciVar, and motifbreakR
+License: GPL-3
 Encoding: UTF-8
 LazyData: true
+Depends: SNPlocs.Hsapiens.dbSNP144.GRCh37, UpSetR, BSgenome.Hsapiens.UCSC.hg19
 Suggests: knitr,
     rmarkdown
 VignetteBuilder: knitr

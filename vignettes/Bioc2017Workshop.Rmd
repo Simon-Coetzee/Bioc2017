@@ -3,9 +3,12 @@ title: "Variant Annotation Workshop with FunciVAR, StateHub and MotifBreakR"
 author: "Simon G. Coetzee & Dennis J. Hazelett"
 date: "`r Sys.Date()`"
 output: 
-  html_document:
-    fig_width: 7
-    fig_height: 6
+  html_notebook:
+    highlight: tango
+    theme: journal
+    toc: yes
+    toc_float:
+      collapsed: false
 
 vignette: >
   %\VignetteIndexEntry{FunciVar, MotifBreakR and StatePaintR}
@@ -19,66 +22,90 @@ In this vignette we will learn to take a set of variants, arbitrarily defined as
 
 ## Setup
 
-First we need to import the packages we'll be using. FunciVar can be accessed directly from our github repositories via biocLite. MotifbreakR, GenomicRanges and VariantAnnotation packages are available through bioconductor:
+First we need to import the packages we'll be using. FunciVar can be accessed directly from our github repositories via biocLite. GenomicRanges and VariantAnnotation packages are available through bioconductor:
 
-```{r, message = FALSE}
+Install the required packages, if they are not already availible.
+```{r, message = FALSE, eval = FALSE}
 source("https://bioconductor.org/biocLite.R")
 biocLite("Simon-Coetzee/StatePaintR", suppressUpdates = TRUE, dependencies = TRUE)
 biocLite("Simon-Coetzee/funciVar", suppressUpdates = TRUE, dependencies = TRUE)
 biocLite("Simon-Coetzee/motifbreakR", suppressUpdates = TRUE, dependencies = TRUE)
 biocLite("SNPlocs.Hsapiens.dbSNP144.GRCh37")
+```
+Then load the packages we'll be using in this workshop.
+```{r, message = FALSE}
 library(StatePaintR)
 library(funciVar)
-library(motifbreakR)
 library(GenomicRanges)
 library(VariantAnnotation)
+library(UpSetR)
 ```
 
 ## Getting annotations
 
-Annotations can come from any source, the key requirement be that they be coerced into GRanges format for use by the funciVar package. For our purposes, we have populated a directory called "segmentations" with a set of bed files representing all the cell types in the Roadmap epigenomics project. Each segmentation file contains a set of chromatin state calls made by our StatePaintR package (covered in a later section).
+Annotations can come from any source, the key requirement be that they be coerced into GRanges format for use by the funciVar package. For our purposes, We can search on StateHub for all cell types that are annotated in **hg19** with segmentations combining at least, **H3K4me1, H3K4me3, H3K27ac, and CTCF**.
 
-FunciVar imports these files efficiently by pointing a function called "GetSegmentations" directly at this directory. Then it's just a matter of renaming the state abbreviations to easily recognized, human readable form.
+![*StateHub Search for hg19, H3K4me1, H3K4me3, H3K27ac, and CTCF*](statehubsearch.png)
+
+Each segmentation file contains a set of chromatin state calls made by our StatePaintR package.
+
+### How does StatePaintR work?
+Lets look at *StatePaintR*: [slides](http://goo.gl/wvPVbh) and [rmarkdown](http://www.statehub.org/statehub_media/statepaintr.nb.html)
+
+### Returning to Analysis
+FunciVar imports these files efficiently by pointing a function called "GetSegmentations" directly. `GetSegmentations()` expects files to be in [BED](https://genome.ucsc.edu/FAQ/FAQformat#format1) format with column 4 (Name) corresponding to the state call. Then it's just a matter of renaming the state abbreviations to easily recognized, human readable form.
 
 ```{r}
+## Base url of StateHub files in our search
+
 statehub.encode.aws <- "http://s3-us-west-2.amazonaws.com/statehub-trackhub/tracks/5813b67f46e0fb06b493ceb0/hg19/ENCODE/"
-segmentation.files <- c(paste0(statehub.encode.aws,
-                               "bipolar_spindle_neuron.8mark.segmentation.bed"),
-                        paste0(statehub.encode.aws, 
-                               "dohh2.8mark.segmentation.bed"),
-                        paste0(statehub.encode.aws, 
-                               "gm12878.11mark.segmentation.bed"),
-                        paste0(statehub.encode.aws,
-                               "hepatocyte.9mark.segmentation.bed"),
-                        paste0(statehub.encode.aws,
-                               "induced_pluripotent_stem_cell.7mark.segmentation.bed"),
-                        paste0(statehub.encode.aws, 
-                               "mcf-7.12mark.segmentation.bed"),
-                        paste0(statehub.encode.aws,
-                               "neutrophil.8mark.segmentation.bed"))
-encode.segmenations <- GetSegmentations(segmentation.files)
-encode.segmenations
-encode.segmenations <- unlist(encode.segmenations)
-encode.segmenations.granular <- encode.segmenations
-mcols(encode.segmenations[encode.segmenations$state %in% c("EAR", "AR"), ])$state <- "Active Enhancer"
-mcols(encode.segmenations[encode.segmenations$state %in% c("EPR", "EWR"), ])$state <- "Weak Enhancer"
-mcols(encode.segmenations[encode.segmenations$state %in% c("PAR"), ])$state <- "Active Promoter"
-mcols(encode.segmenations[encode.segmenations$state %in% c("PPR", "PPWR", "PWR"), ])$state <- "Weak Promoter"
-mcols(encode.segmenations[encode.segmenations$state %in% c("CTCF"), ])$state <- "CTCF"
-mcols(encode.segmenations[encode.segmenations$state %in% c("HET", "SCR", "TRS"), ])$state <- "Other"
+
+## A list of StateHub urls
+
+segmentation.files <- c(
+  paste0(statehub.encode.aws,
+         "bipolar_spindle_neuron.8mark.segmentation.bed"),
+  paste0(statehub.encode.aws, 
+         "dohh2.8mark.segmentation.bed"),
+  paste0(statehub.encode.aws, 
+         "gm12878.11mark.segmentation.bed"),
+  paste0(statehub.encode.aws,
+         "hepatocyte.9mark.segmentation.bed"),
+  paste0(statehub.encode.aws,
+         "induced_pluripotent_stem_cell.7mark.segmentation.bed"),
+  paste0(statehub.encode.aws, 
+         "mcf-7.12mark.segmentation.bed"),
+  paste0(statehub.encode.aws,
+         "neutrophil.8mark.segmentation.bed"))
+
+## Import States
+
+encode.segmentations <- GetSegmentations(files = segmentation.files)
+esegs <- unlist(encode.segmentations)
+esegs
+
+## Group States in Human readable collections.
+
+mcols(esegs[esegs$state %in% c("EAR", "AR"), ])$state <- "Active Enhancer"
+mcols(esegs[esegs$state %in% c("EPR", "EWR"), ])$state <- "Weak Enhancer"
+mcols(esegs[esegs$state %in% c("PAR"), ])$state <- "Active Promoter"
+mcols(esegs[esegs$state %in% c("PPR", "PPWR", "PWR"), ])$state <- "Weak Promoter"
+mcols(esegs[esegs$state %in% c("CTCF"), ])$state <- "CTCF"
+mcols(esegs[esegs$state %in% c("HET", "SCR", "TRS"), ])$state <- "Other"
 ```
 
-## Creating the foreground variant set
+## Importing Variants
 
-There are two potential use cases for funciVar. In the first case, a foreground set is predefined and nothing needs to be done outside of importing to R and coercing into GRanges. Such foreground sets could include any kind of variant; common population polymorphisms or differentially methylated CpGs for example. 
+There are two potential use cases that we envision for funciVar. In the first case, our enrichment calculations are based on a foreground and background set that are predefined and nothing needs to be done outside of importing to R and coercing into GRanges. Such foreground sets could include any kind of variant; common population polymorphisms or differentially methylated CpGs for example. 
 
-In the second case, especially common for primary GWAS studies, a single top "hit" has been identified and a set of variants known to be in linkage disequilibrium (LD) should be calculated. We will cover the latter case. The LD calculations can be used to further subdivide regional variants into foreground and background based on some LD threshold (typically at r^2 = 0.8). In other instances, more creative methods of obtaining a background set might be warranted.
+In the second case, especially common for primary GWAS studies, a single top "hit" has been identified and a set of variants known to be in linkage disequilibrium (LD) should be calculated. We will cover this latter case. The LD calculations can be used to further subdivide regional variants into foreground and background based on some LD threshold (typically at R&sup2; = 0.8). In other instances, more creative methods of obtaining a background set might be warranted.
 
-We will use 1000 genomes data for our LD calculations, but in principle we could apply this to any population stored in VCF. First we need to identify the file containing the 1000 and assign all the patient metadata into a variable called "my.samples".
+We will use 1000 genomes data for our LD calculations, but in principle we could apply this to any population stored in VCF. First we need to identify the file containing the 1000 and assign all the sample metadata into a variable called "my.samples".
 
 ```{r}
 my.samples <- read.delim("http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_samples_v3.20130502.ALL.panel", stringsAsFactors = FALSE)
 my.samples <- my.samples[, c("sample", "pop", "super_pop", "gender")]
+my.samples
 ```
 
 Next we will identify the file with chromosome 10 variants and define the index region as a filter for the foreground variant set. For simplicity's sake, we are testing a single region, but we could easily analyze multiple ranges. For this example, we are using a GWAS variant linked to breast cancer on chromosome 10.
@@ -86,60 +113,78 @@ Next we will identify the file with chromosome 10 variants and define the index 
 ```{r}
 chr10.remote.vcf <- "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr10.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz"
 index10q26 <- "rs2981579"
-### PMID: 23535729
-#### I THINK EBI is rate limiting requests heavily, we must either host these two chromosomes on our AWS or package with these rda files.
-#save(vcf10q26, file = "vcf10q26.rda")
-#load("vcf10q26.rda")
 pos10q26 <- GRanges("10:123337335-123337335") + 500000
+pos10q26
 ```
-
-### Calculation of LD
 
 Using the 1MB window that we defined for the index variant, we capture the relevant variants from the VCF file for our LD calculations.
 
-```{r}
-vcf10q26 <- GetVariantsInWindow(file = chr10.remote.vcf, position = pos10q26)
+```{r, eval=FALSE}
+vcf10q26 <- GetVariantsInWindow(file = chr10.remote.vcf, 
+                                position = pos10q26, 
+                                type = "vcf")
 ```
 
-To ensure that we make our LD calculation from the correct population structure, we set the population using metadata "my.samples".
+EBI throttles downloads from here pretty hard. So We have a local version of the vcf included also, in case you get the above error.
 
 ```{r}
-vcf10q26 <- SetPopulation(vcf10q26, sample_sheet = my.samples)
+chr10.local.vcf <- system.file("extdata",
+                               "1000genomes.chr10.122836335-123838335.vcf.gz",
+                               package="bioc2017")
+
+vcf10q26 <- GetVariantsInWindow(file = chr10.local.vcf, 
+                                position = pos10q26, 
+                                type = "vcf")
 ```
 
-Now we calculate LD structure relative to our index variant in the european population background.
+To ensure that we make our LD calculation from the correct population structure, we set the population using metadata from "my.samples".
 
-```{r, message=FALSE}
-vcf10q26snps <- CalcLD(vcf10q26, index10q26, "EUR")
+```{r}
+vcf10q26 <- SetPopulation(vcf = vcf10q26, sample_sheet = my.samples)
+vcf10q26
+```
+
+Now we calculate LD structure relative to our index variant in the european population background. This operation only operates on SNVs and will not return indels or other variants.
+
+You will also notice that the rowRanges of the vcf object has been updated with additional data about each variants.
+
+```{r}
+vcf10q26snps <- CalcLD(vcf = vcf10q26, index = index10q26, population = "EUR")
+vcf10q26snps
+rowRanges(vcf10q26snps)
 ```
 
 Next we use the "SplitVcfLd" as a convenience function to define our foreground and background sets based on LD. This is a sensible choice since other variants in the same region are likely to have similar properties relative to genomic features like gene Density, gc bias, epigenetic marks etc. As an alternative, we might consider using a resource like SNPsnap to match these properties genome wide.
 
 ```{r}
-vcf10q26snps <- SplitVcfLd(vcf10q26snps)
+vcf10q26snps <- SplitVcfLd(vcf = vcf10q26snps, ld = c(metric = "R.squared",
+                                                      cutoff = 0.8,
+                                                      maf = 0.01))
 ```
 
 ## Functional enrichment by chromatin state
 
-In the next part of our workflow, we want to determine whether the index SNP and its LD proxies, which we defined to be in the "foreground", are enriched in specific cellular features. As alluded to earlier, the FunciVar package could be used to carry out any analagous operation to find enrichment of one set of features in another. Here we plan to use chromatin state calls from 119 human tissues in Roadmap, which we've imported at the beginning of our session. We specify that we are using this type of annotation with the "feature.type" argument (alternative "biofeatures" argument can be used for single element features, _e.g._ a bed file with K27ac peaks). Using the "CalculateEnrichment" function we generate an object containing summary enrichment statistics.
+In the next part of our workflow, we want to determine whether the index SNP and its LD proxies, which we defined to be in the "foreground", are enriched in specific cellular features. As alluded to earlier, the FunciVar package could be used to carry out any analagous operation to find enrichment of one set of features in another. Here we plan to use chromatin state calls from 119 human tissues in Roadmap, which we've imported at the beginning of our session. We specify that we are using this type of annotation with the "feature.type" argument (alternative "biofeatures" argument can be used for single element features, _e.g._ a bed file with H3K27ac peaks). Using the "CalculateEnrichment" function we generate an object containing summary enrichment statistics.
 
 ### Enrichment calculations
 
 FunciVar by default calculates a likelihood based on the beta-binomial distribution, returning a 95% credible interval (optionally set by the "CI" argument) for the range of differences between the two populations of variants (_i.e._ foreground and background). Specifically it calculates a distribution of true enrichment (as probability of overlap) for both sets of variants in the genomic features based on the observed number of overlaps:
 
-```{latex}
-$$
-\theta_{fg} ~ beta(S_{fg} + a, N_{fg} + b)
-\theta_{bg} ~ beta(S_{bg} + a, N_{bg} + b)
-$$
-```
+$$\theta_{fg} ~ Beta(S_{fg} + \alpha, N_{fg} + \beta)$$
+$$\theta_{bg} ~ Beta(S_{bg} + \alpha, N_{bg} + \beta)$$
 
-for S successes in N trials. FunciVar uses an uninformative Jeffreys prior (a=0.5, b=0.5) to compare the two distributions directly by subtracting permuted samples to obtain the distribution of differences. The prior can be overidden in special cases (see documentation).
+for S successes in N trials. FunciVar uses an uninformative [Jeffreys prior](https://en.wikipedia.org/wiki/Jeffreys_prior) c(a=0.5, b=0.5) to compare the two distributions directly by subtracting permuted samples to obtain the distribution of differences. The prior can be overidden in special cases (see documentation).
+
+![*Jeffreys prior and flat prior densities*](jeffreysprior.png)
 
 To perform these operations with funciVar, we call the "CalculateEnrichment" function.
 
 ```{r}
-enrich10q26 <- CalculateEnrichment(variants = vcf10q26snps, features = encode.segmenations, feature.type = "segmentations", CI = 0.8, strict.subset = TRUE, return.overlaps = TRUE)
+enrich10q26 <- CalculateEnrichment(variants = vcf10q26snps,
+                                   features = esegs,
+                                   feature.type = "segmentations", 
+                                   CI = 0.8, 
+                                   return.overlaps = TRUE)
 ```
 
 At first perhaps we are interested which cell types have the most overlaps with with snps, say among active enhancers.
@@ -148,61 +193,78 @@ At first perhaps we are interested which cell types have the most overlaps with 
 snps.10q26.enhancers <- enrich10q26$overlaps$`Active Enhancer`
 fg.snps.df <- as.data.frame(mcols(snps.10q26.enhancers$foregound.overlaps))
 bg.snps.df <- as.data.frame(mcols(snps.10q26.enhancers$background.overlaps))
-UpSetR::upset(fg.snps.df, nsets = 7)
-UpSetR::upset(bg.snps.df, nsets = 7)
+```
+**Foreground SNVs in Active Enhancers**
+```{r}
+upset(fg.snps.df, nsets = 7)
+```
+**Background SNVs in Active Enhancers**
+```{r}
+upset(bg.snps.df, nsets = 7)
 ```
 
 While it looks like the snps are largely falling within hepatocyte active enhancers, if we examine the enrichment statistics we can see otherwise. Now we'll extract the enrichment stats and plot the enrichment profile of the variants.
 
-```{r}
+```{r, fig.width=12}
 enrich10q26.enrich <- enrich10q26$enrichment
-PlotEnrichment(enrich10q26.enrich, value = "difference", block1 = "state", color.by = "sample", ncol = 6)
+PlotEnrichment(enrich10q26.enrich, 
+               value = "difference", 
+               block1 = "state", 
+               color.by = "sample", 
+               ncol = 6)
 ```
 
 ### Annotations of interest
 
 While there is a tendency for SNPs in LD with each other to be enriched in some cellular interest, it is probable that only a subset of them are of functional interest. In our case, we would like to examine the hypothesis that one of our putative functional SNPs disrupts a transcription factor binding site. 
 
-Since our index SNP was found in association with breast cancer, let's choose the MCF7 cell line from Roadmap to identify proxies that overlap with active enhancers. Segmentation features live in the overlaps slot of the enrichment object from the previous steps.
+Since our index SNP was found in association with breast cancer, and we see enrichment of it's LD proxies in MCF7, we'll choose linked variants that overlap Active Enhancer in the MCF7 cell line from ENCODE. Segmentation features live in the overlaps slot of the enrichment object from the previous steps.
 
 ```{r}
 snps.10q26.enhancers <- snps.10q26.enhancers$foregound.overlaps[snps.10q26.enhancers$foregound.overlaps$MCF.7 > 0, ]
+snps.10q26.enhancers
 ```
 
 # MotifBreakR analysis of TF binding disruption
 
 Now that we have a SNP of interest from breast tissue enhancer, let's work with the motifBreakR package to determine whether a putative transcription factor binding site (TFBS) is disrupted. MotifBreakR allows us to do this with nothing more than the rsID or a location and allele information. It enables us to use any genome housed in bioconductor BSgenome packages and any set of motifs curated in the MotifDB package (plus some custom databases in MotifDB format that are included with the MotifBreakR installation)[^1].
 
-[^1] see the [manuscript](https://academic.oup.com/bioinformatics/article/31/23/3847/209440/motifbreakR-an-R-Bioconductor-package-for) and [vignette](https://bioconductor.org/packages/release/bioc/vignettes/motifbreakR/inst/doc/motifbreakR-vignette.html) for details.
+We also have some slides explaining how [motifbreakR works](http://goo.gl/PJQb4b) in addition to the paper and vignette in the footnote indicated above.
+
+[^1]: see the [manuscript](https://academic.oup.com/bioinformatics/article/31/23/3847/209440/motifbreakR-an-R-Bioconductor-package-for) and [vignette](https://bioconductor.org/packages/release/bioc/vignettes/motifbreakR/inst/doc/motifbreakR-vignette.html) for details.
 
 ## Setup
 
 We need to import some version of the human genome and a compatible set of variants from Bioconductor.
 
 ```{r}
+library(motifbreakR)
 library(BSgenome.Hsapiens.UCSC.hg19)
 library(SNPlocs.Hsapiens.dbSNP144.GRCh37)
 ```
 
 We need to grab the SNP variant objects out of SNPlocs package that correspond to our enhancer proxies.
 
-```{r}
+```{r, warnings = FALSE}
 snps.mb.10q26.enhancers <- snps.from.rsid(rsid = names(snps.10q26.enhancers),
                                           dbSNP = SNPlocs.Hsapiens.dbSNP144.GRCh37,
                                           search.genome = BSgenome.Hsapiens.UCSC.hg19)
+snps.mb.10q26.enhancers
 ```
 
 ## Analysis
 
-Now a simple call to the motifbreakR function completes the analysis. Here, we specify that we want to filter our results by p-value (rather than scaled motif scores), we'll set that p-value threshold at 10^-4, using information content (set argument *method = "ic"*) and a uniform prior on the GC content.
+Now a simple call to the motifbreakR function completes the analysis. Here, we specify that we want to filter our results by p-value (rather than scaled motif scores), we'll set that p-value threshold at 10^-4, using information content (set argument `method = "ic"`) and a uniform prior on the GC content.
 
 ```{r}
-results.10q26.enhancers <- motifbreakR(snpList = snps.mb.10q26.enhancers, filterp = TRUE,
+results.10q26.enhancers <- motifbreakR(snpList = snps.mb.10q26.enhancers,
+                                       filterp = TRUE,
                                        pwmList = hocomoco,
                                        threshold = 1e-4,
                                        method = "ic",
                                        bkg = c(A=0.25, C=0.25, G=0.25, T=0.25),
                                        BPPARAM = BiocParallel::bpparam())
+results.10q26.enhancers
 ```
 
 MotifbreakR does a quick estimate of the p-value threshold initially. To obtain accurate p-values, we run "calculatePvalue" in a seperate step (beware this can be slow!).
@@ -219,44 +281,4 @@ MotifbreakR includes a plotting function to visualize the SNP in its genomic con
 plotMB(results.10q26.enhancers, "rs34354213", effect = "strong")
 ```
 
-<!-- # Second example -->
-
-
-<!-- ```{r, eval = FALSE} -->
-<!-- chr1.remote.vcf <- "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr1.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz" -->
-<!-- index1q21.1 <- "rs12405132" -->
-<!-- ### PMID: 25751625 -->
-<!-- ### I THINK EBI is rate limiting requests heavily, we must either host these two chromosomes on our AWS or package with these rda files. -->
-<!-- pos1q21.1 <- promoters(as("1:145644984-145644984", "GRanges"), upstream = 500000, downstream = 500000) -->
-<!-- ``` -->
-<!-- ```{r} -->
-<!-- vcf1q21.1 <- GetVariantsInWindow(file = chr1.remote.vcf, position = pos1q21.1) -->
-<!-- vcf1q21.1 <- SetPopulation(vcf1q21.1, sample_sheet = my.samples) -->
-<!-- vcf1q21.1snps <- CalcLD(vcf1q21.1, index1q21.1, "EUR") -->
-<!-- vcf1q21.1snps <- SplitVcfLd(vcf1q21.1snps) -->
-<!-- enrich1q21.1 <- CalculateEnrichment(variants = vcf1q21.1snps, features = encode.segmenations, feature.type = "segmentations", strict.subset = TRUE, return.overlaps = TRUE) -->
-<!-- ``` -->
-<!-- ```{r} -->
-<!-- enrich1q21.1.enrich <- enrich1q21.1$enrichment -->
-<!-- enrich1q21.1.enrich$sample <- stringr::str_replace(enrich1q21.1.enrich$sample, "\\.\\d*mark.segmentation.bed", "") -->
-<!-- PlotEnrichment(enrich1q21.1.enrich, value = "difference", block1 = "state", color.by = "sample", ncol = 6) -->
-<!-- ``` -->
-<!-- ```{r} -->
-<!-- snps.1q21.1.enhancers <- enrich1q21.1$overlaps$`Active Enhancer`$foregound.overlaps[enrich1q21.1$overlaps$`Active Enhancer`$foregound.overlaps$mcf.7.12mark.segmentation.bed > 0, ] -->
-<!-- snps.mb.1q21.1.enhancers <- snps.from.rsid(rsid = names(snps.1q21.1.enhancers), -->
-<!--                                           dbSNP = SNPlocs.Hsapiens.dbSNP144.GRCh37, -->
-<!--                                           search.genome = BSgenome.Hsapiens.UCSC.hg19) -->
-<!-- ``` -->
-<!-- ```{r} -->
-<!-- results.1q21.1.enhancers <- motifbreakR(snpList = snps.mb.1q21.1.enhancers, filterp = TRUE, -->
-<!--                                        pwmList = hocomoco, -->
-<!--                                        threshold = 1e-4, -->
-<!--                                        method = "ic", -->
-<!--                                        bkg = c(A=0.25, C=0.25, G=0.25, T=0.25), -->
-<!--                                        BPPARAM = BiocParallel::bpparam()) -->
-<!-- pvalue.results.1q21.1.enhancers <- calculatePvalue(results = results.1q21.1.enhancers) -->
-<!-- ``` -->
-<!-- ```{r} -->
-<!-- plotMB(pvalue.results.1q21.1.enhancers, "rs2040086") -->
-<!-- plotMB(pvalue.results.1q21.1.enhancers, "rs2040085") -->
-<!-- ``` -->
+Here we can see that the variant disrupts a Pax-5 motif which is interesting given the results in this paper [*Breast Cancer Malignant Processes are Regulated by Pax-5 Through the Disruption of FAK Signaling Pathways*](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5219892/)
